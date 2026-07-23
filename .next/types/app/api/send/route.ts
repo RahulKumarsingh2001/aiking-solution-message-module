@@ -1,4 +1,4 @@
-// File: /Users/rahulkumarsingh/Developer/aiking Solution/module1/app/api/send/route.ts
+// File: /Users/rahulkumarsingh/Developer/aiking Solution/aiking-solution-message-module/app/api/send/route.ts
 import * as entry from '../../../../../app/api/send/route.js'
 import type { NextRequest } from 'next/server.js'
 

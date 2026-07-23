@@ -1,4 +1,4 @@
-// File: /Users/rahulkumarsingh/Developer/aiking Solution/module1/app/layout.tsx
+// File: /Users/rahulkumarsingh/Developer/aiking Solution/aiking-solution-message-module/app/layout.tsx
 import * as entry from '../../../app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

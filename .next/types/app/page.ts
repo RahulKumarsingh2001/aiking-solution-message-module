@@ -1,4 +1,4 @@
-// File: /Users/rahulkumarsingh/Developer/aiking Solution/module1/app/page.tsx
+// File: /Users/rahulkumarsingh/Developer/aiking Solution/aiking-solution-message-module/app/page.tsx
 import * as entry from '../../../app/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

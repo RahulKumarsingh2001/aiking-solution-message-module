@@ -16,6 +16,7 @@ export async function POST(request: Request) {
       message: 'Upload endpoint ready',
     });
   } catch (error) {
+    console.error('Error handling upload:', error);
     return NextResponse.json({ success: false, message: 'Upload failed' }, { status: 500 });
   }
 }

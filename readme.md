@@ -99,6 +99,8 @@ Step 6: Send / Schedule
 - SMS → Twilio SMS API
 - WhatsApp → Twilio WhatsApp API
 
+- Now we don't used Twilio we can shift to a Plivo module
+
 ---
 
 ### 4.4 Template Engine
