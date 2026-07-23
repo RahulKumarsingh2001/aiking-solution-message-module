@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getTwilioClient, getFromNumber } from '@/lib/twilioClient';
+import { getPlivoClient, getPlivoFromNumber, normalizePhoneToE164, sendPlivoMessage } from '@/lib/plivoClient';
 
 type Recipient = {
   name: string;
@@ -40,20 +41,25 @@ export async function POST(request: Request) {
     const intent: string = campaign.intent || 'EMI_REMINDER';
     const recipients: Recipient[] = campaign.recipients || campaign.data || [];
 
-    // Verify Twilio configuration before initializing client
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    if (!accountSid || !authToken) {
+    const provider = (process.env.MESSAGE_PROVIDER || 'plivo').toLowerCase();
+    const plivoEnabled = Boolean(process.env.PLIVO_AUTH_ID && process.env.PLIVO_AUTH_TOKEN);
+    const twilioEnabled = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
+
+    if (provider === 'plivo' && !plivoEnabled) {
+      return NextResponse.json({ success: false, message: 'Plivo credentials not configured. Set PLIVO_AUTH_ID and PLIVO_AUTH_TOKEN' }, { status: 500 });
+    }
+
+    if (provider === 'twilio' && !twilioEnabled) {
       return NextResponse.json({ success: false, message: 'Twilio credentials not configured. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN' }, { status: 500 });
     }
 
-    const from = getFromNumber(channel);
+    const from = provider === 'plivo' ? getPlivoFromNumber(channel) : getFromNumber(channel);
     if (!from || String(from).trim().length === 0) {
-      return NextResponse.json({ success: false, message: 'Twilio "from" number not configured. Set TWILIO_SMS_FROM or TWILIO_WHATSAPP_FROM' }, { status: 500 });
+      return NextResponse.json({ success: false, message: `${provider === 'plivo' ? 'Plivo' : 'Twilio'} "from" number not configured. Set ${provider === 'plivo' ? 'PLIVO_SMS_FROM or PLIVO_WHATSAPP_FROM' : 'TWILIO_SMS_FROM or TWILIO_WHATSAPP_FROM'}` }, { status: 500 });
     }
 
-    // Initialize Twilio client
-    const client = getTwilioClient();
+    const plivoClient = plivoEnabled ? getPlivoClient() : null;
+    const twilioClient = twilioEnabled ? getTwilioClient() : null;
 
     const logs: any[] = [];
     let delivered = 0;
@@ -65,7 +71,7 @@ export async function POST(request: Request) {
       const batch = recipients.slice(i, i + batchSize);
 
       await Promise.all(batch.map(async (r) => {
-        const toNumber = r.phone && r.phone.length === 10 ? `+91${r.phone}` : (r.phone || '');
+        const toNumber = normalizePhoneToE164(r.phone || '');
         const bodyText = renderMessage(intent, r);
 
         let attempts = 0;
@@ -75,29 +81,38 @@ export async function POST(request: Request) {
         while (attempts < 3 && !success) {
           attempts += 1;
           try {
-            await client.messages.create({
-              body: bodyText,
-              from: from,
-              to: channel === 'whatsapp' ? `whatsapp:${toNumber}` : toNumber,
-            });
+            if (provider === 'plivo') {
+              await sendPlivoMessage({
+                channel,
+                from,
+                to: channel === 'whatsapp' ? toNumber : toNumber,
+                body: bodyText,
+              });
+            } else {
+              await twilioClient?.messages.create({
+                body: bodyText,
+                from: from,
+                to: channel === 'whatsapp' ? `whatsapp:${toNumber}` : toNumber,
+              });
+            }
+
             success = true;
             delivered += 1;
-            logs.push({ phone: r.phone, status: 'sent', attempts });
+            logs.push({ phone: r.phone, status: 'sent', attempts, provider });
           } catch (err) {
             lastError = err;
-            // small backoff
             await new Promise((res) => setTimeout(res, 500 * attempts));
           }
         }
 
         if (!success) {
           failed += 1;
-          logs.push({ phone: r.phone, status: 'failed', attempts, error: String(lastError) });
+          logs.push({ phone: r.phone, status: 'failed', attempts, provider, error: String(lastError) });
         }
       }));
     }
 
-    return NextResponse.json({ success: true, delivered, failed, total: recipients.length, logs });
+    return NextResponse.json({ success: true, delivered, failed, total: recipients.length, provider, logs });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error?.message || 'Failed to send campaign' }, { status: 500 });
   }
